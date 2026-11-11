@@ -21,6 +21,8 @@ const COLOR = {
   primary: '#7d93ff',
   primaryIdle: '#56608f',
   fallback: '#f59e42',
+  write: '#34d399',
+  async: '#c084fc',
   inactive: '#3a4060',
   ok: '#3ecf8e',
   warn: '#f5b942',
@@ -36,7 +38,16 @@ export interface BoardView {
   selectedId: string | null;
   result: SimulationResult | null;
   trafficRps: number;
+  /** Si el nivel tiene escrituras, las conexiones a la base de datos las llevan. */
+  hasWrites: boolean;
 }
+
+const ROLE_STYLE: Record<PortRole, { color: string; dash: number[]; label: string | null; text: string }> = {
+  primary: { color: COLOR.primary, dash: [], label: null, text: '#c7d0ff' },
+  fallback: { color: COLOR.fallback, dash: [7, 5], label: 'si falla', text: '#ffd2a6' },
+  write: { color: COLOR.write, dash: [], label: 'escrituras', text: '#bdf5dd' },
+  async: { color: COLOR.async, dash: [2, 5], label: 'a la cola', text: '#ead5ff' },
+};
 
 export interface BoardHandlers {
   onNodeTap(id: string): void;
@@ -89,7 +100,7 @@ export class Board {
   resize(): void {
     this.width = this.canvas.parentElement?.getBoundingClientRect().width ?? 600;
     this.portrait = this.width < 640;
-    this.height = this.portrait ? Math.round(Math.max(440, Math.min(window.innerHeight * 0.62, 620))) : 440;
+    this.height = this.portrait ? Math.round(Math.max(520, Math.min(window.innerHeight * 0.66, 680))) : 440;
     const dpr = window.devicePixelRatio || 1;
     this.canvas.style.height = `${this.height}px`;
     this.canvas.width = this.width * dpr;
@@ -144,7 +155,8 @@ export class Board {
 
     for (const edge of view.graph.edges) {
       const flow = result.edgeFlow[edge.id] ?? 0;
-      const color = roles.get(edge.id) === 'fallback' ? COLOR.fallback : COLOR.request;
+      const role = roles.get(edge.id) ?? 'primary';
+      const color = role === 'primary' ? COLOR.request : ROLE_STYLE[role].color;
       emit(edge.id, flow * 0.045, () => ({ kind: 'request', edgeId: edge.id, t: 0, color }));
     }
     for (const node of view.graph.nodes) {
@@ -313,31 +325,39 @@ export class Board {
 
   private drawEdge(edge: GraphEdge, role: PortRole): void {
     const { ctx } = this;
-    const result = this.view!.result;
-    const flow = result ? (result.edgeFlow[edge.id] ?? 0) : null;
+    const view = this.view!;
+    const flow = view.result ? (view.result.edgeFlow[edge.id] ?? 0) : null;
     const { from, to } = this.edgeEnds(edge);
+    const style = ROLE_STYLE[role];
 
-    let color = role === 'fallback' ? COLOR.fallback : flow === null ? COLOR.primaryIdle : COLOR.primary;
+    let color = style.color;
+    if (role === 'primary' && flow === null) color = COLOR.primaryIdle;
     if (flow === 0) color = COLOR.inactive;
 
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2.5;
-    ctx.setLineDash(role === 'fallback' ? [7, 5] : []);
+    ctx.setLineDash(style.dash);
     line(ctx, from, to);
     ctx.setLineDash([]);
     arrowHead(ctx, from, to);
 
     const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
     if (flow !== null && flow > 0) {
-      pill(ctx, mid, `${Math.round(flow)}/s`, role === 'fallback' ? '#ffd2a6' : '#c7d0ff');
+      pill(ctx, mid, `${Math.round(flow)}/s`, style.text);
     } else if (flow === null) {
-      if (role === 'fallback') pill(ctx, lerp(from, to, 0.3), 'si falla', '#ffd2a6');
+      const writesHere = view.hasWrites && role === 'fallback' && this.isDatabase(edge.to);
+      const label = writesHere ? 'si falla + escrituras' : style.label;
+      if (label) pill(ctx, lerp(from, to, 0.3), label, style.text);
       ctx.fillStyle = '#2c3354';
       circle(ctx, mid, 6);
       ctx.fillStyle = COLOR.muted;
       circle(ctx, mid, 2.5);
     }
+  }
+
+  private isDatabase(id: string): boolean {
+    return this.view?.graph.nodes.find((n) => n.id === id)?.type === 'db';
   }
 
   private drawParticles(): void {
@@ -391,7 +411,7 @@ export class Board {
 
     ctx.font = '11px system-ui';
     ctx.fillStyle = COLOR.muted;
-    const capacityText = Number.isFinite(spec.capacity) ? `${spec.capacity}/s` : '';
+    const capacityText = Number.isFinite(spec.capacity) ? `${spec.capacity}${spec.unit ? ' tr' : ''}/s` : '';
     let subtitle = node.type === 'users' ? `${view.trafficRps}/s` : `máx ${capacityText}`;
     if (stats && node.type !== 'users') subtitle = `${Math.round(stats.load)} / ${capacityText}`;
     ctx.fillText(subtitle, c.x, c.y + 20);

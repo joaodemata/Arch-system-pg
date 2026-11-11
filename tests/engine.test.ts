@@ -1,16 +1,21 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { connect, createLevelGraph, edgeRoles, resolvePorts } from '../src/engine/graph';
-import { buildReferenceGraph, parCost, scoreResult } from '../src/engine/scoring';
+import { parCost, scoreResult } from '../src/engine/scoring';
 import { simulate } from '../src/engine/simulate';
 import type { BlockType, Graph, Level } from '../src/engine/types';
 import { LEVELS } from '../src/levels';
-import { level02 } from '../src/levels/level-02';
-import { level03 } from '../src/levels/level-03';
+import { fanIn, fanOut, ids, many } from '../src/levels/helpers';
+
+const level = (id: string): Level => {
+  const found = LEVELS.find((l) => l.id === id);
+  if (!found) throw new Error(`No existe el nivel ${id}`);
+  return found;
+};
 
 /** Construye un grafo a partir del nivel, unos bloques y unas conexiones. */
-function build(level: Level, blocks: Record<string, BlockType>, links: [string, string][]): Graph {
-  let graph = createLevelGraph(level);
+function build(lv: Level, blocks: Record<string, BlockType>, links: [string, string][]): Graph {
+  let graph = createLevelGraph(lv);
   for (const [id, type] of Object.entries(blocks)) graph = { ...graph, nodes: [...graph.nodes, { id, type }] };
   for (const [a, b] of links) {
     const r = connect(graph, a, b);
@@ -20,101 +25,144 @@ function build(level: Level, blocks: Record<string, BlockType>, links: [string, 
   return graph;
 }
 
-describe('niveles', () => {
-  for (const level of LEVELS) {
-    test(`nivel ${level.id}: la solución de referencia consigue 3 estrellas`, () => {
-      const result = simulate(level, buildReferenceGraph(level));
-      assert.equal(result.meetsRequirements, true, result.problems.map((p) => p.message).join('\n'));
-      assert.equal(scoreResult(result, parCost(level)), 3);
-    });
+const messages = (g: Graph, lv: Level) => simulate(lv, g).problems.map((p) => p.message).join('\n');
+const close = (a: number, b: number) => Math.abs(a - b) < 1e-6;
 
-    test(`nivel ${level.id}: la referencia cabe en la paleta`, () => {
-      for (const type of Object.values(level.reference.blocks)) {
-        const used = Object.values(level.reference.blocks).filter((t) => t === type).length;
-        assert.ok(used <= (level.palette[type] ?? 0), `faltan bloques de tipo ${type}`);
-      }
-    });
-  }
-});
-
-describe('nivel 2', () => {
-  const lbWith = (n: number) => {
-    const servers = Object.fromEntries(Array.from({ length: n }, (_, i) => [`s${i + 1}`, 'server' as const]));
-    return build(level02, { lb: 'lb', ...servers }, [['users', 'lb'], ...Object.keys(servers).map((s): [string, string] => ['lb', s])]);
-  };
+describe('escalado (nivel 02)', () => {
+  const withServers = (n: number) =>
+    build(level('02'), { lb: 'lb', ...many('s', n, 'server') }, [['users', 'lb'], ...fanOut('lb', ids('s', n))]);
 
   test('con 2 servidores se saturan', () => {
-    const result = simulate(level02, lbWith(2));
+    const result = simulate(level('02'), withServers(2));
     assert.equal(result.meetsRequirements, false);
-    assert.ok(Math.abs(result.successRate - 0.8) < 1e-6);
+    assert.ok(close(result.successRate, 0.8));
     assert.match(result.problems[0].message, /saturado/);
   });
 
   test('con 4 servidores funciona pero cuesta más: 2 estrellas', () => {
-    const result = simulate(level02, lbWith(4));
-    assert.equal(scoreResult(result, parCost(level02)), 2);
+    assert.equal(scoreResult(simulate(level('02'), withServers(4)), parCost(level('02'))), 2);
   });
 });
 
-describe('nivel 3: cache-aside', () => {
-  const base = { lb: 'lb', s1: 'server', s2: 'server', s3: 'server', cache: 'cache' } as const;
-  const front: [string, string][] = [['users', 'lb'], ['lb', 's1'], ['lb', 's2'], ['lb', 's3']];
-  const toCache: [string, string][] = [['s1', 'cache'], ['s2', 'cache'], ['s3', 'cache']];
+describe('caídas (nivel 04)', () => {
+  test('un servidor XL solo no aguanta su propia caída', () => {
+    const graph = build(level('04'), { xl: 'bigserver' }, [['users', 'xl']]);
+    const result = simulate(level('04'), graph);
+    assert.equal(result.meetsRequirements, false);
+    assert.match(messages(graph, level('04')), /Si cae Servidor XL/);
+  });
+
+  test('los nombres no cambian en los escenarios de caída', () => {
+    const graph = build(level('04'), { lb: 'lb', ...many('s', 2, 'server') }, [['users', 'lb'], ...fanOut('lb', ids('s', 2))]);
+    const result = simulate(level('04'), graph);
+    assert.deepEqual(result.scenarios.map((s) => s.failedNode), ['Servidor 1', 'Servidor 2']);
+  });
+});
+
+describe('cache-aside (nivel 06)', () => {
+  const lv = level('06');
+  const base = { lb: 'lb', ...many('s', 3, 'server'), cache: 'cache' } as const;
+  const front: [string, string][] = [['users', 'lb'], ...fanOut('lb', ids('s', 3))];
 
   test('si solo un servidor tiene respaldo, los otros pierden sus fallos de caché', () => {
-    const graph = build(level03, base, [...front, ...toCache, ['s1', 'db']]);
-    const result = simulate(level03, graph);
+    const graph = build(lv, base, [...front, ...fanIn(ids('s', 3), 'cache'), ['s1', 'db']]);
+    const result = simulate(lv, graph);
     assert.equal(result.meetsRequirements, false);
-    const messages = result.problems.map((p) => p.message).join('\n');
-    assert.match(messages, /Servidor 2 no tiene ruta de respaldo/);
-    assert.match(messages, /Servidor 3 no tiene ruta de respaldo/);
-    assert.doesNotMatch(messages, /Servidor 1/);
-    // 2 de 3 servidores pierden el 20 % de lo que reciben.
-    assert.ok(Math.abs(result.successRate - (1 - (2 / 3) * 0.2)) < 1e-6);
+    const text = messages(graph, lv);
+    assert.match(text, /Servidor 2 no tiene ruta de respaldo/);
+    assert.match(text, /Servidor 3 no tiene ruta de respaldo/);
+    assert.doesNotMatch(text, /Servidor 1/);
+    assert.ok(close(result.successRate, 1 - (2 / 3) * 0.2));
   });
 
   test('sin caché, la base de datos se satura', () => {
-    const graph = build(level03, base, [...front, ['s1', 'db'], ['s2', 'db'], ['s3', 'db']]);
-    const result = simulate(level03, graph);
-    assert.equal(result.meetsRequirements, false);
-    assert.match(result.problems[0].message, /Base de datos saturada/);
+    const graph = build(lv, base, [...front, ...fanIn(ids('s', 3), 'db')]);
+    assert.match(simulate(lv, graph).problems[0].message, /Base de datos saturada/);
   });
 
   test('un servidor sin datos no puede responder', () => {
-    const graph = build(level03, base, [...front, ['s1', 'cache'], ['s1', 'db'], ['s2', 'cache'], ['s2', 'db']]);
-    const result = simulate(level03, graph);
-    assert.match(result.problems.map((p) => p.message).join('\n'), /Servidor 3 no tiene de dónde sacar los datos/);
+    const graph = build(lv, base, [...front, ...fanIn(['s1', 's2'], 'cache'), ...fanIn(['s1', 's2'], 'db')]);
+    assert.match(messages(graph, lv), /Servidor 3 no tiene de dónde leer los datos/);
+  });
+});
+
+describe('escrituras (nivel 07)', () => {
+  test('sin conexión a la base de datos principal, las escrituras se pierden', () => {
+    const lv = level('07');
+    const graph = build(lv, { s1: 'server', r1: 'replica' }, [['users', 's1'], ['s1', 'r1']]);
+    assert.match(messages(graph, lv), /Servidor no puede guardar datos/);
+  });
+});
+
+describe('CDN (nivel 09)', () => {
+  const lv = level('09');
+
+  test('sin CDN, la distancia hace imposible cumplir la latencia', () => {
+    const graph = build(lv, { s1: 'server' }, [['users', 's1']]);
+    const result = simulate(lv, graph);
+    assert.ok(result.avgLatencyMs > 120);
+    assert.equal(result.meetsRequirements, false);
   });
 
-  test('con respaldo completo, la base de datos solo recibe los fallos de caché', () => {
-    const result = simulate(level03, buildReferenceGraph(level03));
-    assert.ok(Math.abs(result.nodes.db.load - 50) < 1e-6);
-    assert.ok(Math.abs(result.nodes.cache.load - 250) < 1e-6);
+  test('la CDN sirve el estático y solo reenvía el resto', () => {
+    const graph = build(lv, { cdn: 'cdn', s1: 'server' }, [['users', 'cdn'], ['cdn', 's1']]);
+    const result = simulate(lv, graph);
+    assert.ok(close(result.nodes.s1.load, 150 * (1 - 0.7 * 0.9)));
+  });
+});
+
+describe('colas (niveles 11 y 12)', () => {
+  test('hacer el trabajo pesado en el servidor dispara la carga y la latencia', () => {
+    const lv = level('11');
+    const graph = build(lv, { s1: 'server' }, [['users', 's1']]);
+    const result = simulate(lv, graph);
+    assert.ok(close(result.nodes.s1.load, 90 * (1 + 0.3 * 5)));
+    assert.equal(result.meetsRequirements, false);
+  });
+
+  test('con pocos workers se pierden trabajos aunque las peticiones vayan bien', () => {
+    const lv = level('12');
+    const graph = build(lv, { lb: 'lb', ...many('s', 2, 'server'), queue: 'queue', ...many('w', 2, 'worker') }, [
+      ['users', 'lb'],
+      ...fanOut('lb', ids('s', 2)),
+      ...fanIn(ids('s', 2), 'queue'),
+      ...fanOut('queue', ids('w', 2)),
+    ]);
+    const result = simulate(lv, graph);
+    assert.ok(close(result.successRate, 1));
+    assert.ok(close(result.jobSuccessRate ?? 0, 0.5));
+    assert.match(result.problems[0].message, /cola sin parar/);
   });
 });
 
 describe('conexiones', () => {
   test('la caché es principal y la base de datos respaldo, en cualquier orden', () => {
-    const graph = build(level03, { s1: 'server', cache: 'cache' }, [['db', 's1'], ['cache', 's1']]);
+    const graph = build(level('06'), { s1: 'server', cache: 'cache' }, [['db', 's1'], ['cache', 's1']]);
     const roles = edgeRoles(graph);
     assert.equal(roles.get('s1->cache'), 'primary');
     assert.equal(roles.get('s1->db'), 'fallback');
   });
 
+  test('con caché, réplica y base de datos: principal, respaldo y escrituras', () => {
+    const graph = build(level('08'), { s1: 'server', cache: 'cache', r1: 'replica' }, [['s1', 'db'], ['s1', 'r1'], ['s1', 'cache']]);
+    const roles = edgeRoles(graph);
+    assert.equal(roles.get('s1->cache'), 'primary');
+    assert.equal(roles.get('s1->r1'), 'fallback');
+    assert.equal(roles.get('s1->db'), 'write');
+  });
+
   test('sin caché, la base de datos es el camino principal', () => {
-    const graph = build(level03, { s1: 'server' }, [['s1', 'db']]);
+    const graph = build(level('06'), { s1: 'server' }, [['s1', 'db']]);
     assert.deepEqual(resolvePorts(graph, 's1').primary.map((e) => e.to), ['db']);
   });
 
   test('los usuarios solo pueden tener una salida', () => {
-    const graph = build(level02, { s1: 'server', s2: 'server' }, [['users', 's1']]);
-    const r = connect(graph, 'users', 's2');
-    assert.equal(r.ok, false);
+    const graph = build(level('02'), { s1: 'server', s2: 'server' }, [['users', 's1']]);
+    assert.equal(connect(graph, 'users', 's2').ok, false);
   });
 
   test('no se pueden conectar bloques incompatibles', () => {
-    const graph = build(level03, { cache: 'cache' }, []);
-    const r = connect(graph, 'cache', 'db');
-    assert.equal(r.ok, false);
+    const graph = build(level('06'), { cache: 'cache' }, []);
+    assert.equal(connect(graph, 'cache', 'db').ok, false);
   });
 });

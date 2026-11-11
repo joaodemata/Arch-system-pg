@@ -1,7 +1,10 @@
 import type { Level } from '../engine/types';
-import { level01 } from './level-01';
-import { level02 } from './level-02';
-import { level03 } from './level-03';
+import { fundamentos } from './chapter-1-fundamentos';
+import { datos } from './chapter-2-datos';
+import { global } from './chapter-3-global';
+import { asincrono } from './chapter-4-asincrono';
+import { resiliencia } from './chapter-5-resiliencia';
+import { casosReales } from './chapter-6-casos-reales';
 
-/** Orden de juego. Para añadir un nivel: crear `level-XX.ts` y añadirlo aquí. */
-export const LEVELS: Level[] = [level01, level02, level03];
+/** Orden de juego. Para añadir un nivel: añadirlo al capítulo que toque (o crear uno nuevo). */
+export const LEVELS: Level[] = [...fundamentos, ...datos, ...global, ...asincrono, ...resiliencia, ...casosReales];

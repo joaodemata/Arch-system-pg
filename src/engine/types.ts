@@ -1,12 +1,30 @@
 /** Tipos de bloque que existen en el juego. */
-export type BlockType = 'users' | 'lb' | 'server' | 'cache' | 'db';
+export type BlockType =
+  | 'users'
+  | 'cdn'
+  | 'lb'
+  | 'server'
+  | 'bigserver'
+  | 'cache'
+  | 'replica'
+  | 'db'
+  | 'queue'
+  | 'worker';
+
+/**
+ * Cómo se comporta un bloque en la simulación. Varios tipos pueden compartir
+ * comportamiento (un servidor XL se comporta como un servidor, con otras cifras).
+ */
+export type Behavior = 'source' | 'edge-cache' | 'balancer' | 'server' | 'cache' | 'store' | 'queue' | 'worker';
 
 /**
  * Rol de una conexión saliente:
  * - `primary`: camino normal de la petición (línea continua).
- * - `fallback`: ruta de respaldo cuando el camino principal falla (línea discontinua).
+ * - `fallback`: ruta de respaldo cuando el camino principal falla (discontinua naranja).
+ * - `write`: escrituras, que siempre van a la base de datos principal (continua verde).
+ * - `async`: trabajo que se deja en una cola para hacerlo después (punteada morada).
  */
-export type PortRole = 'primary' | 'fallback';
+export type PortRole = 'primary' | 'fallback' | 'write' | 'async';
 
 /** Un puerto de salida de un bloque: a qué puede conectarse y cuántas veces. */
 export interface PortSpec {
@@ -19,14 +37,17 @@ export interface PortSpec {
 /** Ficha técnica de un tipo de bloque. */
 export interface BlockSpec {
   type: BlockType;
+  behavior: Behavior;
   label: string;
   icon: string;
-  /** Peticiones por segundo que aguanta antes de saturarse. */
+  /** Unidades de trabajo por segundo que aguanta antes de saturarse. */
   capacity: number;
+  /** Unidad en la que se mide la capacidad, para la paleta ("peticiones/s", "trabajos/s"). */
+  unit?: string;
   /** Latencia base en milisegundos, sin carga. */
   latencyMs: number;
   costPerMonth: number;
-  /** Solo para la caché: fracción de consultas que encuentra en memoria. */
+  /** Caché y CDN: fracción de consultas que encuentra en memoria. */
   hitRate?: number;
   /** Para concordar los mensajes en femenino ("saturada"). */
   feminine?: boolean;
@@ -54,16 +75,42 @@ export interface Graph {
   edges: GraphEdge[];
 }
 
+/** Tráfico que llega al sistema y cómo es. */
+export interface Traffic {
+  rps: number;
+  /** Fracción de peticiones de contenido estático (imágenes, CSS…) que una CDN puede servir. */
+  staticShare?: number;
+  /** Latencia de red entre los usuarios y tus servidores. Una CDN la evita para lo que tiene. */
+  originDistanceMs?: number;
+  /** Fracción de peticiones que escriben datos. Siempre van a la base de datos principal. */
+  writeShare?: number;
+  /** Peticiones que además disparan un trabajo pesado (enviar un email, procesar un vídeo…). */
+  heavyWork?: {
+    share: number;
+    /** Cuántas veces más le cuesta al servidor una petición pesada si la hace él mismo. */
+    factor: number;
+    /** Qué es el trabajo, para los textos: "enviar el email de bienvenida". */
+    label: string;
+  };
+}
+
 export interface Level {
   id: string;
+  chapter: string;
   title: string;
   brief: string;
   /** Texto que se muestra al superar el nivel. */
   lesson: string;
-  trafficRps: number;
+  traffic: Traffic;
   requirements: {
+    /** Se aplica a peticiones y, si hay trabajos pesados, también a los trabajos. */
     minSuccessRate: number;
     maxAvgLatencyMs: number;
+    /**
+     * Tipos de bloque cuya caída hay que aguantar: se simula quitar cada bloque de ese
+     * tipo, uno a uno. En esos escenarios solo se exige el porcentaje de éxito.
+     */
+    survive?: BlockType[];
   };
   /** Si es true, los servidores tienen que consultar datos para poder responder. */
   requiresData: boolean;

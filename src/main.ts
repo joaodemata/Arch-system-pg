@@ -112,7 +112,8 @@ function renderBoard(): void {
     positions: state.positions,
     selectedId: state.selectedId,
     result: state.result,
-    trafficRps: currentLevel().trafficRps,
+    trafficRps: currentLevel().traffic.rps,
+    hasWrites: (currentLevel().traffic.writeShare ?? 0) > 0,
   });
 }
 

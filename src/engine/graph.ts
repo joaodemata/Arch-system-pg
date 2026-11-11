@@ -23,6 +23,8 @@ export function outgoing(graph: Graph, id: string): GraphEdge[] {
 export interface ResolvedPorts {
   primary: GraphEdge[];
   fallback: GraphEdge[];
+  write: GraphEdge[];
+  async: GraphEdge[];
   /** Conexiones que no caben en ningún puerto (no deberían existir en un grafo válido). */
   unassigned: GraphEdge[];
 }
@@ -35,7 +37,7 @@ export interface ResolvedPorts {
  */
 export function resolvePorts(graph: Graph, nodeId: string): ResolvedPorts {
   const node = getNode(graph, nodeId);
-  const resolved: ResolvedPorts = { primary: [], fallback: [], unassigned: [] };
+  const resolved: ResolvedPorts = { primary: [], fallback: [], write: [], async: [], unassigned: [] };
   let remaining = outgoing(graph, nodeId);
 
   for (const port of BLOCKS[node.type].ports) {
@@ -56,8 +58,9 @@ export function edgeRoles(graph: Graph): Map<string, PortRole> {
   const roles = new Map<string, PortRole>();
   for (const node of graph.nodes) {
     const ports = resolvePorts(graph, node.id);
-    ports.primary.forEach((e) => roles.set(e.id, 'primary'));
-    ports.fallback.forEach((e) => roles.set(e.id, 'fallback'));
+    for (const role of ['primary', 'fallback', 'write', 'async'] as const) {
+      ports[role].forEach((e) => roles.set(e.id, role));
+    }
   }
   return roles;
 }

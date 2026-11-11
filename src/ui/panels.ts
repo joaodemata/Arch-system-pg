@@ -16,30 +16,43 @@ export function renderLevelTabs(levels: Level[], current: number, best: Record<s
     ...levels.map((level, i) => {
       const button = document.createElement('button');
       button.className = `level-tab${i === current ? ' active' : ''}`;
-      button.textContent = `Nivel ${i + 1}`;
+      button.title = `${level.chapter} · ${level.title}`;
+      button.textContent = `${i + 1}`;
       const stars = best[level.id];
-      if (stars) {
-        const small = document.createElement('small');
-        small.textContent = starText(stars);
-        button.append(small);
-      }
+      const small = document.createElement('small');
+      small.textContent = stars ? starText(stars) : '·';
+      button.append(small);
       button.onclick = () => onSelect(i);
       return button;
     }),
   );
+  container.children[current]?.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
 
 export function renderBrief(level: Level, index: number, par: number): void {
+  $('#level-chapter').textContent = `Capítulo: ${level.chapter}`;
   $('#level-title').textContent = `${index + 1} · ${level.title}`;
   $('#level-brief').textContent = level.brief;
-  const { minSuccessRate, maxAvgLatencyMs } = level.requirements;
-  const chips = [
-    `🚦 ${level.trafficRps} peticiones/s`,
-    `✅ ≥ ${minSuccessRate * 100} % respondidas`,
-    `⏱ ≤ ${maxAvgLatencyMs} ms de media`,
-    `💰 par: ${par} €/mes`,
-  ];
-  $('#level-chips').replaceChildren(...chips.map((text) => Object.assign(document.createElement('span'), { className: 'chip', textContent: text })));
+  $('#level-chips').replaceChildren(
+    ...requirementChips(level, par).map((text) => Object.assign(document.createElement('span'), { className: 'chip', textContent: text })),
+  );
+}
+
+function requirementChips(level: Level, par: number): string[] {
+  const { traffic, requirements } = level;
+  const pct = (x: number) => `${Math.round(x * 100)} %`;
+  const chips = [`🚦 ${traffic.rps} peticiones/s`];
+  if (traffic.originDistanceMs) chips.push(`🌐 usuarios a ${traffic.originDistanceMs} ms`);
+  if (traffic.staticShare) chips.push(`🖼️ ${pct(traffic.staticShare)} estático`);
+  if (traffic.writeShare) chips.push(`✍️ ${pct(traffic.writeShare)} escrituras`);
+  if (traffic.heavyWork) chips.push(`⏳ ${pct(traffic.heavyWork.share)}: ${traffic.heavyWork.label} (×${traffic.heavyWork.factor})`);
+  chips.push(`✅ ≥ ${pct(requirements.minSuccessRate)} respondidas`, `⏱ ≤ ${requirements.maxAvgLatencyMs} ms de media`);
+  if (requirements.survive?.length) {
+    const names = [...new Set(requirements.survive.map((t) => BLOCKS[t].label.toLowerCase().replace(' xl', '')))];
+    chips.push(`🛡️ aguanta la caída de cualquier ${names.join(' o ')}`);
+  }
+  chips.push(`💰 par: ${par} €/mes`);
+  return chips;
 }
 
 export function remaining(level: Level, graph: Graph, type: BlockType): number {
@@ -56,7 +69,9 @@ export function renderPalette(level: Level, graph: Graph, onAdd: (type: BlockTyp
       button.className = 'palette-item';
       button.disabled = left <= 0;
       const hit = spec.hitRate ? ` · ${spec.hitRate * 100} % aciertos` : '';
-      button.innerHTML = `<b>${spec.icon} ${spec.label} ×${left}</b><span>${spec.capacity}/s · ${spec.latencyMs} ms · ${spec.costPerMonth} €/mes${hit}</span>`;
+      const capacity = `${spec.capacity} ${spec.unit ?? 'pet./s'}`;
+      const latency = spec.latencyMs ? ` · ${spec.latencyMs} ms` : '';
+      button.innerHTML = `<b>${spec.icon} ${spec.label} ×${left}</b><span>${capacity}${latency} · ${spec.costPerMonth} €/mes${hit}</span>`;
       button.onclick = () => onAdd(type);
       return button;
     }),
@@ -82,10 +97,17 @@ export function showResultModal({ level, result, stars, par, onNext }: ResultMod
     ${metric(`${(result.successRate * 100).toFixed(1)} %`, 'respondidas', result.successRate >= minSuccessRate)}
     ${metric(`${Math.round(result.avgLatencyMs)} ms`, 'latencia media', result.avgLatencyMs <= maxAvgLatencyMs)}
     ${metric(`${result.monthlyCost} €`, 'coste/mes', result.monthlyCost <= par)}
+    ${result.jobSuccessRate === null ? '' : metric(`${(result.jobSuccessRate * 100).toFixed(1)} %`, 'trabajos hechos', result.jobSuccessRate >= minSuccessRate)}
   </div>`;
+  if (result.scenarios.length) {
+    const rows = result.scenarios.map(
+      (s) => `<li class="${s.passed ? 'ok' : 'ko'}">${s.passed ? '✅' : '❌'} Si cae ${s.failedNode}: ${(s.successRate * 100).toFixed(1)} % respondidas${s.jobSuccessRate === null ? '' : `, ${(s.jobSuccessRate * 100).toFixed(1)} % trabajos`}</li>`,
+    );
+    html += `<p class="note">Pruebas de caída:</p><ul class="scenarios">${rows.join('')}</ul>`;
+  }
 
   if (!result.meetsRequirements) {
-    const items = result.problems.map((p) => `<li>${p.message}${p.lostRps > 0 ? ` <em>(−${Math.round(p.lostRps)}/s)</em>` : ''}</li>`);
+    const items = result.problems.slice(0, 6).map((p) => `<li>${p.message}${p.lostRps > 0 ? ` <em>(−${Math.round(p.lostRps)}/s)</em>` : ''}</li>`);
     html += `<ul class="problems">${items.join('') || '<li>Revisa las conexiones.</li>'}</ul>`;
   } else {
     if (stars < 3) html += `<p class="note">Funciona, pero hay una solución que cuesta ${par} €/mes.</p>`;

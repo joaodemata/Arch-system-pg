@@ -15,18 +15,25 @@ export type Positions = Map<string, BoardPoint>;
 
 /** Columna por defecto de cada tipo de bloque, siguiendo el sentido de las peticiones. */
 const COLUMN: Record<BlockType, number> = {
-  users: 0.08,
-  lb: 0.3,
-  server: 0.52,
-  cache: 0.74,
-  db: 0.92,
+  users: 0.06,
+  cdn: 0.2,
+  lb: 0.34,
+  server: 0.5,
+  bigserver: 0.5,
+  cache: 0.66,
+  queue: 0.66,
+  replica: 0.81,
+  worker: 0.81,
+  db: 0.95,
 };
 
 const ACROSS_SLOTS = [0.5, 0.17, 0.83, 0.33, 0.67, 0.08, 0.92];
 
-/** La caché empieza a un lado para no tapar las rutas de respaldo servidor → base de datos. */
+/** Algunos bloques empiezan a un lado para no tapar las conexiones servidor → base de datos. */
 const PREFERRED_SLOTS: Partial<Record<BlockType, number[]>> = {
   cache: [0.83, 0.17, 0.67, 0.33, 0.5],
+  queue: [0.17, 0.83, 0.33, 0.67, 0.5],
+  worker: [0.17, 0.5, 0.83, 0.33, 0.67, 0.08, 0.92],
 };
 
 export function initialPositions(graph: Graph): Positions {

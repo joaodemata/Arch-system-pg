@@ -1,14 +1,16 @@
 {
   "name": "arch-system-pg",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "tsx --test tests/*.test.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "levels:report": "tsx scripts/level-report.ts",
+    "levels:solve": "tsx scripts/solver.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
