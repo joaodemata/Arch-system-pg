@@ -1,0 +1,60 @@
+:root {
+  --bg: #0f1220; --panel: #181c2e; --panel-2: #20253b; --line: #2c3354;
+  --text: #e8eaf6; --muted: #8a90b0; --accent: #6c8cff;
+  --ok: #3ecf8e; --warn: #f5b942; --bad: #ff5d6c; --fallback: #f59e42;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 12px; }
+
+header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+header h1 { font-size: 17px; margin: 0 auto 0 0; }
+#levels { display: flex; gap: 6px; flex-wrap: wrap; }
+.level-tab { background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.level-tab.active { border-color: var(--accent); background: var(--panel-2); }
+.level-tab small { color: var(--warn); margin-left: 4px; }
+
+.brief { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+.brief h2 { margin: 0 0 6px; font-size: 16px; }
+.brief p { margin: 0 0 10px; color: #c6cae4; line-height: 1.45; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: var(--panel-2); border-radius: 999px; padding: 4px 10px; font-size: 13px; color: #cfd3ef; }
+
+.board { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+canvas { display: block; width: 100%; touch-action: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); align-items: center; }
+.legend .line { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 4px; border-top: 2.5px solid #7d93ff; }
+.legend .line.dashed { border-top: 2.5px dashed var(--fallback); }
+.legend .hint { flex-basis: 100%; }
+
+.palette { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.palette-item { flex: 1 1 140px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 8px 10px; text-align: left; cursor: pointer; }
+.palette-item b { display: block; font-size: 14px; }
+.palette-item span { font-size: 12px; color: var(--muted); }
+.palette-item:disabled { opacity: .35; }
+
+.actions { display: flex; gap: 8px; }
+.btn { flex: 1; border: 0; border-radius: 12px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.ghost { background: var(--panel-2); color: var(--text); flex: 0 0 auto; padding: 13px 18px; }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #2b3150; color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 14px; max-width: 90%; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+.toast.show { opacity: 1; }
+
+.modal { position: fixed; inset: 0; background: rgba(5, 7, 15, .7); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.modal.show { display: flex; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; max-width: 440px; width: 100%; max-height: 90vh; overflow: auto; }
+.card h3 { margin: 0 0 4px; font-size: 20px; }
+.card .actions { margin-top: 12px; }
+.stars { font-size: 34px; letter-spacing: 4px; color: var(--warn); margin: 6px 0; }
+.stars .off { color: #3a4060; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0; }
+.metric { background: var(--panel-2); border-radius: 10px; padding: 8px; text-align: center; }
+.metric b { display: block; font-size: 16px; }
+.metric span { font-size: 11px; color: var(--muted); }
+.metric.good b { color: var(--ok); }
+.metric.bad b { color: var(--bad); }
+.problems { margin: 8px 0; padding-left: 18px; color: #ffc2c8; line-height: 1.45; }
+.problems em { color: var(--muted); font-style: normal; }
+.lesson { background: #1b2a3f; border-left: 3px solid var(--accent); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.45; color: #d6def5; }
+.note { color: var(--muted); font-size: 13px; margin: 6px 0; }
