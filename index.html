@@ -1,321 +1,87 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Arch System PG</title>
-<style>
-:root{--bg:#0f1220;--panel:#181c2e;--panel2:#20253b;--line:#2c3354;--text:#e8eaf6;--muted:#8a90b0;--accent:#6c8cff;--ok:#3ecf8e;--warn:#f5b942;--bad:#ff5d6c}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px}
-.wrap{max-width:960px;margin:0 auto;padding:12px}
-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-header h1{font-size:17px;margin:0 auto 0 0;letter-spacing:.3px}
-.lvbtn{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:6px 10px;font-size:13px;cursor:pointer}
-.lvbtn.on{border-color:var(--accent);background:var(--panel2)}
-.lvbtn small{color:var(--warn);margin-left:4px}
-.brief{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
-.brief h2{margin:0 0 6px;font-size:16px}
-.brief p{margin:0 0 10px;color:#c6cae4;line-height:1.45}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{background:var(--panel2);border-radius:999px;padding:4px 10px;font-size:13px;color:#cfd3ef}
-.boardwrap{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-canvas{display:block;width:100%;touch-action:none}
-.hint{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--muted);pointer-events:none}
-.palette{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-.pbtn{flex:1 1 140px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:8px 10px;text-align:left;cursor:pointer}
-.pbtn b{display:block;font-size:14px}
-.pbtn span{font-size:12px;color:var(--muted)}
-.pbtn:disabled{opacity:.35}
-.actions{display:flex;gap:8px}
-.btn{flex:1;border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:600;cursor:pointer}
-.primary{background:var(--accent);color:#fff}
-.ghost{background:var(--panel2);color:var(--text);flex:0 0 auto;padding:13px 18px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2b3150;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;max-width:90%;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
-.toast.show{opacity:1}
-.modal{position:fixed;inset:0;background:rgba(5,7,15,.7);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
-.modal.show{display:flex}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:420px;width:100%;max-height:90vh;overflow:auto}
-.card h3{margin:0 0 4px;font-size:20px}
-.stars{font-size:34px;letter-spacing:4px;color:var(--warn);margin:6px 0}
-.stars .off{color:#3a4060}
-.metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0}
-.metric{background:var(--panel2);border-radius:10px;padding:8px;text-align:center}
-.metric b{display:block;font-size:16px}
-.metric span{font-size:11px;color:var(--muted)}
-.metric.bad b{color:var(--bad)} .metric.good b{color:var(--ok)}
-.issues{margin:8px 0;padding-left:18px;color:#ffc2c8;line-height:1.45}
-.lesson{background:#1b2a3f;border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;margin:10px 0;line-height:1.45;color:#d6def5}
-.note{color:var(--muted);font-size:13px;margin:6px 0}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Arch System PG</title>
+  <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>🏗️ Arch System PG</h1>
-    <div id="levels" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-  </header>
-  <div class="brief">
-    <h2 id="ltitle"></h2>
-    <p id="lbrief"></p>
-    <div class="chips" id="lchips"></div>
-  </div>
-  <div class="boardwrap">
-    <canvas id="board"></canvas>
-    <div class="hint">Toca un bloque y luego otro para conectarlos · arrastra para mover · toca ● en una flecha para borrarla</div>
-  </div>
-  <div class="palette" id="palette"></div>
-  <div class="actions">
-    <button class="btn ghost" id="reset">↺</button>
-    <button class="btn primary" id="run">▶ Simular tráfico</button>
-  </div>
-</div>
-<div class="toast" id="toast"></div>
-<div class="modal" id="modal"><div class="card" id="mcard"></div></div>
+  <!-- Pantalla 1: elegir mundo -->
+  <main class="screen" id="screen-home">
+    <div class="wrap narrow">
+      <header class="home-header">
+        <h1>🏗️ Arch System PG</h1>
+        <p>Diseña sistemas que funcionen de verdad. Elige un mundo.</p>
+        <div class="total-stars" id="total-stars"></div>
+      </header>
+      <div class="chapter-list" id="world-list"></div>
+    </div>
+  </main>
 
-<script>
-const TYPES={
-  users:{label:'Usuarios',icon:'👥'},
-  lb:{label:'Balanceador',icon:'⚖️',cap:5000,lat:2,cost:15},
-  server:{label:'Servidor',icon:'🖥️',cap:100,lat:20,cost:10},
-  cache:{label:'Caché',icon:'⚡',cap:2000,lat:2,cost:20,hit:0.8,f:1},
-  db:{label:'Base de datos',icon:'🗄️',cap:100,lat:30,cost:0,f:1}
-};
-const ALLOWED={users:['lb','server'],lb:['server'],server:['cache','db'],cache:['db'],db:[]};
-const RANK={users:0,lb:1,server:2,cache:3,db:4};
-const UPOS={users:.08,lb:.3,server:.52,cache:.74,db:.92};
+  <!-- Pantalla 2: capítulos de un mundo -->
+  <main class="screen" id="screen-world">
+    <div class="wrap narrow">
+      <header class="topbar">
+        <button class="back" id="back-home" aria-label="Volver a los mundos">←</button>
+        <div>
+          <h2 id="world-title"></h2>
+          <small id="world-subtitle"></small>
+        </div>
+      </header>
+      <div class="chapter-list" id="chapter-list"></div>
+    </div>
+  </main>
 
-const LEVELS=[
- {title:'1 · Tu primer servidor',
-  brief:'50 personas por segundo entran en tu web. Conecta a los usuarios con un servidor para que alguien les responda.',
-  rps:50,minSuccess:.99,maxLat:100,needsDb:false,palette:{server:2},par:10,
-  fixed:[{type:'users',u:.08,v:.5}],
-  lesson:'Un servidor recibe peticiones y devuelve respuestas. Cada uno aguanta un número máximo de peticiones por segundo; mientras no lo superes, todo va fluido.'},
- {title:'2 · Te has hecho viral',
-  brief:'Ahora llegan 250 peticiones por segundo y cada servidor solo aguanta 100. Además, los usuarios solo conocen una dirección: no pueden repartirse ellos solos entre varios servidores.',
-  rps:250,minSuccess:.99,maxLat:100,needsDb:false,palette:{server:4,lb:1},par:45,
-  fixed:[{type:'users',u:.08,v:.5}],
-  lesson:'Esto es escalado horizontal: en vez de un servidor más grande, pones varios iguales. El balanceador de carga es la única dirección que conocen los usuarios y reparte las peticiones entre los servidores. Así funcionan casi todas las webs grandes.'},
- {title:'3 · La base de datos sufre',
-  brief:'Cada petición necesita consultar la base de datos, y esta solo aguanta 100 consultas por segundo. Tienes una caché que resuelve el 80 % de las consultas por sí sola; solo los fallos llegan a la base de datos.',
-  rps:250,minSuccess:.99,maxLat:150,needsDb:true,palette:{server:4,lb:1,cache:1},par:65,
-  fixed:[{type:'users',u:.08,v:.5},{type:'db',u:.92,v:.5}],
-  lesson:'Una caché guarda en memoria las respuestas más pedidas. Aquí resuelve 4 de cada 5 consultas sin tocar la base de datos, que es la pieza más lenta y difícil de escalar. Por eso los servicios grandes cachean todo lo que pueden.'}
-];
+  <!-- Pantalla 3: camino de niveles de un capítulo -->
+  <main class="screen" id="screen-chapter">
+    <div class="wrap narrow">
+      <header class="topbar">
+        <button class="back" id="back-world" aria-label="Volver a los capítulos">←</button>
+        <div>
+          <h2 id="chapter-title"></h2>
+          <small id="chapter-subtitle"></small>
+        </div>
+      </header>
+      <div class="level-path" id="level-path"></div>
+    </div>
+  </main>
 
-const $=s=>document.querySelector(s);
-const cv=$('#board'),ctx=cv.getContext('2d');
-const NW=108,NH=60;
-let W=0,H=0,portrait=false,L=0,nodes=[],edges=[],sel=null,sim=null,nid=1,anim=null,particles=[];
-let best={};try{best=JSON.parse(localStorage.getItem('asp_best')||'{}')}catch(e){}
+  <!-- Pantalla 4: el nivel -->
+  <main class="screen" id="screen-game">
+    <div class="wrap">
+      <header class="topbar">
+        <button class="back" id="back-chapter" aria-label="Volver al capítulo">←</button>
+        <div>
+          <small class="chapter" id="level-chapter"></small>
+          <h2 id="level-title"></h2>
+        </div>
+      </header>
 
-function saveBest(){try{localStorage.setItem('asp_best',JSON.stringify(best))}catch(e){}}
-function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2400)}
-function starStr(n){return '★'.repeat(n)+'☆'.repeat(3-n)}
+      <section class="brief">
+        <p id="level-brief"></p>
+        <div class="chips" id="level-chips"></div>
+      </section>
 
-function load(i){
-  L=i;const lv=LEVELS[i];
-  nodes=lv.fixed.map(f=>({id:nid++,type:f.type,u:f.u,v:f.v,fixed:true}));
-  edges=[];sel=null;sim=null;stopAnim();renderUI();draw();
-}
-function renderUI(){
-  const lv=LEVELS[L];
-  $('#levels').innerHTML=LEVELS.map((l,i)=>`<button class="lvbtn ${i===L?'on':''}" data-i="${i}">Nivel ${i+1}${best[i]?`<small>${starStr(best[i])}</small>`:''}</button>`).join('');
-  document.querySelectorAll('.lvbtn').forEach(b=>b.onclick=()=>load(+b.dataset.i));
-  $('#ltitle').textContent=lv.title;$('#lbrief').textContent=lv.brief;
-  $('#lchips').innerHTML=`<span class="chip">🚦 ${lv.rps} peticiones/s</span><span class="chip">✅ ≥ ${lv.minSuccess*100}% respondidas</span><span class="chip">⏱ ≤ ${lv.maxLat} ms de media</span><span class="chip">💰 par: ${lv.par} €/mes</span>`;
-  renderPalette();
-}
-function left(t){return LEVELS[L].palette[t]-nodes.filter(n=>n.type===t&&!n.fixed).length}
-function renderPalette(){
-  const p=LEVELS[L].palette;
-  $('#palette').innerHTML=Object.keys(p).map(t=>{const T=TYPES[t];const extra=t==='cache'?` · ${T.hit*100}% aciertos`:'';
-    return `<button class="pbtn" data-t="${t}" ${left(t)<=0?'disabled':''}><b>${T.icon} ${T.label} ×${left(t)}</b><span>${T.cap}/s · ${T.lat} ms · ${T.cost} €/mes${extra}</span></button>`}).join('');
-  document.querySelectorAll('.pbtn').forEach(b=>b.onclick=()=>addNode(b.dataset.t));
-}
-function addNode(t){
-  if(left(t)<=0)return;
-  const u=UPOS[t];let bestV=.5,bestD=-1;
-  for(const v of [.5,.22,.78,.36,.64,.12,.88]){
-    let d=9;nodes.forEach(n=>{if(Math.abs(n.u-u)<.14)d=Math.min(d,Math.abs(n.v-v))});
-    if(d>bestD+1e-6){bestD=d;bestV=v}
-    if(d>.2){bestV=v;break}
-  }
-  const n={id:nid++,type:t,u,v:bestV};nodes.push(n);clampNode(n);changed();
-}
-function changed(){sim=null;stopAnim();renderPalette();draw()}
+      <section class="board">
+        <canvas id="board"></canvas>
+        <div class="legend" id="legend"></div>
+      </section>
 
-/* ---------- geometry ---------- */
-function pos(n){return portrait?{x:n.v*W,y:n.u*H}:{x:n.u*W,y:n.v*H}}
-function setXY(n,x,y){if(portrait){n.v=x/W;n.u=y/H}else{n.u=x/W;n.v=y/H}clampNode(n)}
-function clampNode(n){const p=pos(n);const x=Math.min(W-NW/2-6,Math.max(NW/2+6,p.x)),y=Math.min(H-NH/2-6,Math.max(NH/2+6,p.y));if(portrait){n.v=x/W;n.u=y/H}else{n.u=x/W;n.v=y/H}}
-function edgePts(e){
-  const a=pos(byId(e.from)),b=pos(byId(e.to));const dx=b.x-a.x,dy=b.y-a.y;
-  const s=k=>Math.min((NW/2+k)/Math.abs(dx||1e-6),(NH/2+k)/Math.abs(dy||1e-6));
-  const s1=s(2),s2=s(6);
-  return {x1:a.x+dx*s1,y1:a.y+dy*s1,x2:b.x-dx*s2,y2:b.y-dy*s2};
-}
-function byId(id){return nodes.find(n=>n.id===id)}
-function hitNode(x,y){for(let i=nodes.length-1;i>=0;i--){const p=pos(nodes[i]);if(Math.abs(x-p.x)<NW/2&&Math.abs(y-p.y)<NH/2)return nodes[i]}return null}
-function delBtn(n){const p=pos(n);return {x:p.x+NW/2-4,y:p.y-NH/2+4}}
-function hitEdge(x,y){for(const e of edges){const p=edgePts(e);const mx=(p.x1+p.x2)/2,my=(p.y1+p.y2)/2;if(Math.hypot(x-mx,y-my)<16)return e}return null}
+      <section class="inspector" id="inspector" hidden></section>
 
-/* ---------- connect ---------- */
-function connect(a,b){
-  if(a===b)return;
-  let from=a,to=b;
-  if(!ALLOWED[a.type].includes(b.type)){
-    if(ALLOWED[b.type].includes(a.type)){from=b;to=a}
-    else{toast(`${TYPES[a.type].label} y ${TYPES[b.type].label} no se pueden conectar.`);return}
-  }
-  if(edges.some(e=>e.from===from.id&&e.to===to.id)){toast('Ya están conectados.');return}
-  if(from.type==='users'&&edges.some(e=>e.from===from.id)){toast('Los usuarios solo conocen una dirección. Necesitas algo que reparta el tráfico.');return}
-  edges.push({id:nid++,from:from.id,to:to.id});changed();
-}
+      <section class="palette" id="palette"></section>
 
-/* ---------- simulation ---------- */
-function analyze(){
-  const lv=LEVELS[L];const st={};nodes.forEach(n=>st[n.id]={in:0,latSum:0,u:0,lat:0});
-  const flow={};const issues=new Set();let ok=0,okLat=0;
-  const order=[...nodes].sort((a,b)=>RANK[a.type]-RANK[b.type]);
-  for(const n of order){
-    const s=st[n.id],T=TYPES[n.type],outs=edges.filter(e=>e.from===n.id);
-    if(n.type==='users'){
-      s.in=lv.rps;
-      if(!outs.length){issues.add('Los usuarios no están conectados a nada.');continue}
-      outs.forEach(e=>{const f=lv.rps/outs.length;flow[e.id]=f;st[e.to].in+=f});continue;
-    }
-    if(s.in<=0)continue;
-    const avg=s.latSum/s.in;s.u=s.in/T.cap;const served=Math.min(s.in,T.cap);
-    s.lat=T.lat*(1+3*Math.min(s.u,1)**3);
-    if(s.u>1)issues.add(`${T.label} ${T.f?'saturada':'saturado'}: recibe ${Math.round(s.in)}/s y solo aguanta ${T.cap}/s.`);
-    const Lt=avg+s.lat;let pass=0,term=0;
-    if(n.type==='lb'){pass=served;if(!outs.length)issues.add('El balanceador no tiene servidores detrás.')}
-    else if(n.type==='server'){if(lv.needsDb){pass=served;if(!outs.length)issues.add('Hay un servidor sin acceso a la base de datos: no puede responder.')}else term=served}
-    else if(n.type==='cache'){term=served*T.hit;pass=served*(1-T.hit);if(!outs.length)issues.add('La caché no está conectada a la base de datos: los fallos de caché se pierden.')}
-    else if(n.type==='db')term=served;
-    ok+=term;okLat+=term*Lt;
-    if(pass>0&&outs.length){const f=pass/outs.length;outs.forEach(e=>{flow[e.id]=f;st[e.to].in+=f;st[e.to].latSum+=f*Lt})}
-  }
-  const success=ok/lv.rps,lat=ok?okLat/ok:0;
-  const cost=nodes.filter(n=>!n.fixed).reduce((a,n)=>a+TYPES[n.type].cost,0);
-  if(ok&&lat>lv.maxLat)issues.add(`La latencia media (${Math.round(lat)} ms) supera el límite de ${lv.maxLat} ms.`);
-  const passed=success>=lv.minSuccess-1e-9&&lat<=lv.maxLat;
-  let stars=0;if(passed){stars=1;if(cost<=lv.par*1.25)stars=2;if(cost<=lv.par)stars=3}
-  return {st,flow,success,lat,cost,passed,stars,issues:[...issues]};
-}
+      <div class="actions">
+        <button class="btn ghost" id="reset" title="Reiniciar nivel">↺</button>
+        <button class="btn primary" id="run">▶ Simular tráfico</button>
+      </div>
+    </div>
+  </main>
 
-function run(){
-  sel=null;sim=analyze();particles=[];stopAnim();
-  const t0=performance.now();let last=t0;edges.forEach(e=>e.acc=0);
-  const step=now=>{
-    const dt=Math.min(.05,(now-last)/1000);last=now;
-    edges.forEach(e=>{const f=sim.flow[e.id]||0;e.acc+=f*dt*.045;while(e.acc>=1){e.acc-=1;particles.push({e,t:0})}});
-    particles.forEach(p=>p.t+=dt*.85);particles=particles.filter(p=>p.t<1&&edges.includes(p.e));
-    draw();
-    if(now-t0<2800)anim=requestAnimationFrame(step);else{anim=null;particles=[];draw();showResult()}
-  };
-  anim=requestAnimationFrame(step);
-}
-function stopAnim(){if(anim)cancelAnimationFrame(anim);anim=null;particles=[]}
+  <div class="toast" id="toast"></div>
+  <div class="modal" id="modal"><div class="card" id="modal-card"></div></div>
 
-function showResult(){
-  const lv=LEVELS[L],r=sim;
-  if(r.passed&&r.stars>(best[L]||0)){best[L]=r.stars;saveBest();renderUI()}
-  const m=(v,lab,good)=>`<div class="metric ${good?'good':'bad'}"><b>${v}</b><span>${lab}</span></div>`;
-  let h=`<h3>${r.passed?'¡Aguanta! 🎉':'No aguanta 💥'}</h3>`;
-  h+=`<div class="stars">${[0,1,2].map(i=>`<span class="${i<r.stars?'':'off'}">★</span>`).join('')}</div>`;
-  h+=`<div class="metrics">${m((r.success*100).toFixed(1)+'%','respondidas',r.success>=lv.minSuccess-1e-9)}${m(Math.round(r.lat)+' ms','latencia media',r.lat<=lv.maxLat)}${m(r.cost+' €','coste/mes',r.cost<=lv.par)}</div>`;
-  if(!r.passed)h+=`<ul class="issues">${r.issues.map(i=>`<li>${i}</li>`).join('')||'<li>Revisa las conexiones.</li>'}</ul>`;
-  else{
-    if(r.stars<3)h+=`<p class="note">Funciona, pero existe una solución que cuesta ${lv.par} €/mes. ${r.stars===1?'Te sobran piezas.':'Casi lo tienes.'}</p>`;
-    else if(r.cost<lv.par)h+=`<p class="note">¡Más barato que la solución de referencia!</p>`;
-    h+=`<div class="lesson">💡 ${lv.lesson}</div>`;
-  }
-  h+=`<div class="actions" style="margin-top:12px"><button class="btn ghost" id="mclose">Seguir editando</button>${r.passed&&L<LEVELS.length-1?'<button class="btn primary" id="mnext">Siguiente nivel →</button>':''}</div>`;
-  $('#mcard').innerHTML=h;$('#modal').classList.add('show');
-  $('#mclose').onclick=()=>$('#modal').classList.remove('show');
-  const nx=$('#mnext');if(nx)nx.onclick=()=>{$('#modal').classList.remove('show');load(L+1)};
-}
-
-/* ---------- drawing ---------- */
-function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
-function stateColor(u){return u>1?'#ff5d6c':u>.8?'#f5b942':'#3ecf8e'}
-function draw(){
-  ctx.clearRect(0,0,W,H);
-  ctx.strokeStyle='rgba(255,255,255,.035)';ctx.lineWidth=1;
-  for(let x=0;x<W;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
-  for(let y=0;y<H;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
-  for(const e of edges){
-    const p=edgePts(e),f=sim?sim.flow[e.id]||0:null;
-    ctx.strokeStyle=f===null?'#56608f':f>0?'#7d93ff':'#3a4060';ctx.lineWidth=2.5;
-    ctx.beginPath();ctx.moveTo(p.x1,p.y1);ctx.lineTo(p.x2,p.y2);ctx.stroke();
-    const a=Math.atan2(p.y2-p.y1,p.x2-p.x1);ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();
-    ctx.moveTo(p.x2+Math.cos(a)*6,p.y2+Math.sin(a)*6);ctx.lineTo(p.x2-Math.cos(a-.45)*10,p.y2-Math.sin(a-.45)*10);ctx.lineTo(p.x2-Math.cos(a+.45)*10,p.y2-Math.sin(a+.45)*10);ctx.fill();
-    const mx=(p.x1+p.x2)/2,my=(p.y1+p.y2)/2;
-    if(f!==null&&f>0){ctx.fillStyle='#0f1220';rr(mx-22,my-9,44,18,9);ctx.fill();ctx.fillStyle='#c7d0ff';ctx.font='11px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(Math.round(f)+'/s',mx,my)}
-    else if(!sim){ctx.fillStyle='#2c3354';ctx.beginPath();ctx.arc(mx,my,6,0,7);ctx.fill();ctx.fillStyle='#8a90b0';ctx.beginPath();ctx.arc(mx,my,2.5,0,7);ctx.fill()}
-  }
-  for(const pt of particles){
-    const p=edgePts(pt.e),s=sim.st[pt.e.to];const x=p.x1+(p.x2-p.x1)*pt.t,y=p.y1+(p.y2-p.y1)*pt.t;
-    ctx.fillStyle=s&&s.u>1&&pt.t>.75?'#ff5d6c':'#9fe8c3';ctx.beginPath();ctx.arc(x,y,3.2,0,7);ctx.fill();
-  }
-  for(const n of nodes){
-    const p=pos(n),T=TYPES[n.type],s=sim&&sim.st[n.id];
-    const x=p.x-NW/2,y=p.y-NH/2;
-    ctx.fillStyle=n.fixed?'#1d2236':'#20253b';rr(x,y,NW,NH,12);ctx.fill();
-    ctx.lineWidth=sel===n?3:2;
-    ctx.strokeStyle=sel===n?'#6c8cff':s&&s.in>0&&T.cap?stateColor(s.u):n.fixed?'#3a4266':'#39406a';ctx.stroke();
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.font='18px system-ui';ctx.fillStyle='#fff';ctx.fillText(T.icon,p.x,p.y-13);
-    ctx.font='600 12px system-ui';ctx.fillText(T.label,p.x,p.y+5);
-    ctx.font='11px system-ui';ctx.fillStyle='#8a90b0';
-    let sub=n.type==='users'?`${LEVELS[L].rps}/s`:`máx ${T.cap}/s`;
-    if(s&&T.cap)sub=`${Math.round(s.in)} / ${T.cap}/s`;
-    ctx.fillText(sub,p.x,p.y+20);
-    if(s&&T.cap&&s.in>0){const w=NW-20,u=Math.min(s.u,1);ctx.fillStyle='#2c3354';ctx.fillRect(x+10,y+NH-5,w,3);ctx.fillStyle=stateColor(s.u);ctx.fillRect(x+10,y+NH-5,w*u,3)}
-    if(sel===n&&!n.fixed){const d=delBtn(n);ctx.fillStyle='#ff5d6c';ctx.beginPath();ctx.arc(d.x,d.y,11,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 13px system-ui';ctx.fillText('✕',d.x,d.y+1)}
-  }
-  if(nodes.length<=LEVELS[L].fixed.length&&!edges.length){ctx.fillStyle='#5d6590';ctx.font='13px system-ui';ctx.textAlign='center';ctx.fillText('Añade bloques desde abajo ↓',W/2,portrait?H*.3:H*.15)}
-}
-
-/* ---------- input ---------- */
-let drag=null;
-function xy(ev){const r=cv.getBoundingClientRect();return {x:ev.clientX-r.left,y:ev.clientY-r.top}}
-cv.addEventListener('pointerdown',ev=>{
-  if(anim)return;const {x,y}=xy(ev);
-  if(sel&&!sel.fixed){const d=delBtn(sel);if(Math.hypot(x-d.x,y-d.y)<15){edges=edges.filter(e=>e.from!==sel.id&&e.to!==sel.id);nodes=nodes.filter(n=>n!==sel);sel=null;changed();return}}
-  const n=hitNode(x,y);
-  drag={n,x0:x,y0:y,moved:false,off:n?{x:pos(n).x-x,y:pos(n).y-y}:null};cv.setPointerCapture(ev.pointerId);
-});
-cv.addEventListener('pointermove',ev=>{
-  if(!drag||!drag.n)return;const {x,y}=xy(ev);
-  if(!drag.moved&&Math.hypot(x-drag.x0,y-drag.y0)<7)return;
-  drag.moved=true;setXY(drag.n,x+drag.off.x,y+drag.off.y);draw();
-});
-cv.addEventListener('pointerup',ev=>{
-  if(!drag)return;const {x,y}=xy(ev);const d=drag;drag=null;
-  if(d.moved)return;
-  if(d.n){
-    if(sel&&sel!==d.n){connect(sel,d.n);sel=null}
-    else sel=sel===d.n?null:d.n;
-    draw();return;
-  }
-  const e=hitEdge(x,y);
-  if(e&&!sim){edges=edges.filter(k=>k!==e);changed();return}
-  sel=null;draw();
-});
-
-$('#run').onclick=()=>{if(!anim)run()};
-$('#reset').onclick=()=>load(L);
-function resize(){
-  const r=cv.parentElement.getBoundingClientRect();W=r.width;portrait=W<640;
-  H=portrait?Math.round(Math.max(440,Math.min(innerHeight*.62,620))):440;
-  cv.style.height=H+'px';const dpr=devicePixelRatio||1;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
-  nodes.forEach(clampNode);draw();
-}
-addEventListener('resize',resize);
-load(0);resize();
-</script>
+  <script type="module" src="./src/main.ts"></script>
 </body>
 </html>

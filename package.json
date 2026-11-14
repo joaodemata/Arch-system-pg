@@ -1,0 +1,25 @@
+{
+  "name": "arch-system-pg",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc",
+    "levels:report": "tsx scripts/level-report.ts",
+    "levels:solve": "tsx scripts/solver.ts",
+    "levels:can": "tsx scripts/can-report.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.0.0"
+  }
+}
