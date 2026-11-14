@@ -1,39 +1,34 @@
-import { addNode, connect, createLevelGraph, removeEdge, removeNode } from './engine/graph';
-import { parCost, scoreResult } from './engine/scoring';
-import { simulate, type SimulationResult } from './engine/simulate';
-import type { BlockType, Graph } from './engine/types';
-import { LEVELS } from './levels';
 import { Board } from './ui/board';
-import { initialPositions, placeNew, type Positions } from './ui/layout';
-import { remaining, renderBrief, renderLevelTabs, renderPalette, showResultModal, toast } from './ui/panels';
+import type { Positions } from './ui/layout';
+import { renderChapterMap, renderLevelPath, renderWorldPicker } from './ui/map';
+import { renderBrief, renderInspector, renderLegend, renderPalette, showResultModal, toast } from './ui/panels';
 import { loadBestStars, saveBestStars } from './ui/storage';
+import { WORLDS, findLevel, findWorld, levelsOf, type LevelRef } from './worlds';
+import { starsFor } from './worlds/scoring';
+import type { AnyGraph } from './worlds/types';
 
 const SIMULATION_ANIMATION_MS = 2800;
 
 interface GameState {
-  levelIndex: number;
-  graph: Graph;
+  ref: LevelRef | null;
+  graph: AnyGraph;
   positions: Positions;
   selectedId: string | null;
-  result: SimulationResult | null;
+  result: unknown;
 }
 
-const state: GameState = {
-  levelIndex: 0,
-  graph: { nodes: [], edges: [] },
-  positions: new Map(),
-  selectedId: null,
-  result: null,
-};
+const state: GameState = { ref: null, graph: { nodes: [], edges: [] }, positions: new Map(), selectedId: null, result: null };
 const bestStars = loadBestStars();
 
-const currentLevel = () => LEVELS[state.levelIndex];
+/** El nivel en juego; solo se llama con la pantalla de juego abierta. */
+const current = () => state.ref!;
 
 const board = new Board(document.querySelector('#board') as HTMLCanvasElement, {
   onNodeTap(id) {
+    const { world, level } = current();
     const selected = state.selectedId;
     if (selected && selected !== id) {
-      const result = connect(state.graph, selected, id);
+      const result = world.connect(level, state.graph, selected, id);
       state.selectedId = null;
       if (result.ok) return applyEdit(result.graph);
       toast(result.error);
@@ -43,12 +38,12 @@ const board = new Board(document.querySelector('#board') as HTMLCanvasElement, {
     render();
   },
   onEdgeTap(id) {
-    applyEdit(removeEdge(state.graph, id));
+    applyEdit(current().world.removeEdge(state.graph, id));
   },
   onDeleteTap(id) {
     state.positions.delete(id);
     state.selectedId = null;
-    applyEdit(removeNode(state.graph, id));
+    applyEdit(current().world.removeNode(state.graph, id));
   },
   onBackgroundTap() {
     state.selectedId = null;
@@ -60,75 +55,142 @@ const board = new Board(document.querySelector('#board') as HTMLCanvasElement, {
   },
 });
 
-function loadLevel(index: number): void {
+function loadLevel(ref: LevelRef): void {
   board.stopAnimation();
-  state.levelIndex = index;
-  state.graph = createLevelGraph(currentLevel());
-  state.positions = initialPositions(state.graph);
+  state.ref = ref;
+  state.graph = ref.world.createGraph(ref.level);
+  state.positions = ref.world.initialPositions(ref.level, state.graph);
   state.selectedId = null;
   state.result = null;
+  renderLegend(ref.world.legend);
   render();
 }
 
 /** Cualquier cambio en la arquitectura invalida el último resultado. */
-function applyEdit(graph: Graph): void {
+function applyEdit(graph: AnyGraph): void {
   board.stopAnimation();
   state.graph = graph;
   state.result = null;
+  const { world, level } = current();
+  world.arrange?.(level, graph, state.positions);
   render();
 }
 
-function addBlock(type: BlockType): void {
-  if (remaining(currentLevel(), state.graph, type) <= 0) return;
-  const { graph, node } = addNode(state.graph, type);
-  state.positions.set(node.id, placeNew(state.positions, type));
+function addBlock(type: string): void {
+  const { world, level } = current();
+  const entry = world.palette(level, state.graph).find((e) => e.type === type);
+  if (!entry || entry.left <= 0) return;
+  const { graph, id } = world.addNode(level, state.graph, type);
+  state.positions.set(id, world.placeNew(level, state.positions, type));
   applyEdit(graph);
 }
 
 function runSimulation(): void {
   if (board.isAnimating) return;
-  const level = currentLevel();
+  const ref = current();
+  const { world, level } = ref;
   state.selectedId = null;
-  state.result = simulate(level, state.graph);
-  renderBoard();
+  state.result = world.simulate(level, state.graph);
+  render();
 
-  const result = state.result;
+  const report = world.report(level, state.result);
   board.playSimulation(SIMULATION_ANIMATION_MS, () => {
-    const par = parCost(level);
-    const stars = scoreResult(result, par);
+    const par = world.par(level);
+    const stars = starsFor(report.meetsRequirements, report.cost, par);
     if (stars > (bestStars[level.id] ?? 0)) {
       bestStars[level.id] = stars;
       saveBestStars(bestStars);
-      renderTabs();
     }
-    const hasNext = state.levelIndex < LEVELS.length - 1;
-    showResultModal({ level, result, stars, par, onNext: hasNext ? () => loadLevel(state.levelIndex + 1) : null });
+    const next = levelsOf(world)[ref.index + 1];
+    showResultModal({
+      level,
+      result: report,
+      stars,
+      par,
+      costUnit: world.costUnit,
+      onNext: next ? () => go(`#/nivel/${next.id}`) : null,
+      onMap: () => go(chapterHash(ref)),
+    });
   });
 }
 
 function renderBoard(): void {
-  board.update({
-    graph: state.graph,
-    positions: state.positions,
-    selectedId: state.selectedId,
-    result: state.result,
-    trafficRps: currentLevel().traffic.rps,
-    hasWrites: (currentLevel().traffic.writeShare ?? 0) > 0,
-  });
-}
-
-function renderTabs(): void {
-  renderLevelTabs(LEVELS, state.levelIndex, bestStars, loadLevel);
+  const { world, level } = current();
+  board.update({ scene: world.scene(level, state.graph, state.result), positions: state.positions, selectedId: state.selectedId });
 }
 
 function render(): void {
-  const level = currentLevel();
-  renderTabs();
-  renderBrief(level, state.levelIndex, parCost(level));
-  renderPalette(level, state.graph, addBlock);
+  const { world, level, index } = current();
+  renderBrief(level, index + 1, world.chips(level));
+  renderPalette(world.palette(level, state.graph), addBlock);
+  renderInspector(state.selectedId ? world.inspector(level, state.graph, state.selectedId) : null, world.inspectorHint, applyEdit);
   renderBoard();
 }
 
-(document.querySelector('#run') as HTMLButtonElement).onclick = runSimulation;
-(document.querySelector('#reset') as HTMLButtonElement).onclick = () => loadLevel(state.levelIndex);
-loadLevel(0);
+// --- Navegación: #/ (mundos) · #/mundo/ID · #/mundo/ID/N (capítulo) · #/nivel/ID ---
+
+type Screen = 'home' | 'world' | 'chapter' | 'game';
+
+const chapterHash = (ref: LevelRef) => `#/mundo/${ref.world.id}/${ref.chapterIndex + 1}`;
+
+function show(screen: Screen): void {
+  for (const el of document.querySelectorAll<HTMLElement>('.screen')) el.classList.toggle('active', el.id === `screen-${screen}`);
+  window.scrollTo(0, 0);
+}
+
+function go(hash: string): void {
+  if (location.hash === hash) route();
+  else location.hash = hash;
+}
+
+function route(): void {
+  board.stopAnimation();
+  document.querySelector('#modal')?.classList.remove('show');
+  const [, kind, param, sub] = location.hash.split('/');
+
+  if (kind === 'nivel') {
+    const ref = findLevel(decodeURIComponent(param ?? ''));
+    if (ref) {
+      show('game');
+      board.resize(); // el canvas no tenía tamaño mientras su pantalla estaba oculta
+      loadLevel(ref);
+      return;
+    }
+  }
+
+  // Enlaces antiguos (#/capitulo/N) apuntaban a los capítulos web.
+  const [worldId, chapterParam] = kind === 'capitulo' ? ['web', param] : [param, sub];
+  const world = kind === 'mundo' || kind === 'capitulo' ? findWorld(worldId ?? '') : null;
+  if (world) {
+    const chapterIndex = Number(chapterParam) - 1;
+    const chapter = world.chapters[chapterIndex];
+    if (chapter) {
+      renderLevelPath(world, chapter, chapterIndex, bestStars, (level) => go(`#/nivel/${level.id}`));
+      show('chapter');
+      return;
+    }
+    // Un mundo con un solo capítulo va directo a su camino de niveles.
+    // (replace, para que el botón atrás del navegador no vuelva a caer en la redirección).
+    if (world.chapters.length === 1 && chapterParam === undefined) return location.replace(`#/mundo/${world.id}/1`);
+    renderChapterMap(world, bestStars, (i) => go(`#/mundo/${world.id}/${i + 1}`));
+    show('world');
+    return;
+  }
+
+  renderWorldPicker(WORLDS, bestStars, (w) => go(`#/mundo/${w.id}`));
+  show('home');
+}
+
+const button = (selector: string) => document.querySelector(selector) as HTMLButtonElement;
+button('#run').onclick = runSimulation;
+button('#reset').onclick = () => loadLevel(current());
+button('#back-home').onclick = () => go('#/');
+button('#back-world').onclick = () => {
+  const [, , worldId] = location.hash.split('/');
+  const world = findWorld(worldId ?? '');
+  // Si el mundo tiene un solo capítulo, su pantalla de capítulos se salta: volver al inicio.
+  go(world && world.chapters.length > 1 ? `#/mundo/${world.id}` : '#/');
+};
+button('#back-chapter').onclick = () => go(chapterHash(current()));
+window.addEventListener('hashchange', route);
+route();
