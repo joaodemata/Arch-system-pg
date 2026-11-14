@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.3.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -10,7 +13,8 @@
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc",
     "levels:report": "tsx scripts/level-report.ts",
-    "levels:solve": "tsx scripts/solver.ts"
+    "levels:solve": "tsx scripts/solver.ts",
+    "levels:can": "tsx scripts/can-report.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

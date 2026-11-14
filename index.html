@@ -7,37 +7,77 @@
   <link rel="stylesheet" href="./src/styles.css">
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>🏗️ Arch System PG</h1>
-      <nav id="levels"></nav>
-    </header>
-
-    <section class="brief">
-      <div class="chapter" id="level-chapter"></div>
-      <h2 id="level-title"></h2>
-      <p id="level-brief"></p>
-      <div class="chips" id="level-chips"></div>
-    </section>
-
-    <section class="board">
-      <canvas id="board"></canvas>
-      <div class="legend">
-        <span><i class="line solid"></i> petición</span>
-        <span><i class="line dashed"></i> respaldo si falla</span>
-        <span><i class="line write"></i> escrituras</span>
-        <span><i class="line async"></i> a la cola</span>
-        <span class="hint">Toca dos bloques para conectarlos · arrastra para mover · toca ● para borrar una flecha</span>
-      </div>
-    </section>
-
-    <section class="palette" id="palette"></section>
-
-    <div class="actions">
-      <button class="btn ghost" id="reset" title="Reiniciar nivel">↺</button>
-      <button class="btn primary" id="run">▶ Simular tráfico</button>
+  <!-- Pantalla 1: elegir mundo -->
+  <main class="screen" id="screen-home">
+    <div class="wrap narrow">
+      <header class="home-header">
+        <h1>🏗️ Arch System PG</h1>
+        <p>Diseña sistemas que funcionen de verdad. Elige un mundo.</p>
+        <div class="total-stars" id="total-stars"></div>
+      </header>
+      <div class="chapter-list" id="world-list"></div>
     </div>
-  </div>
+  </main>
+
+  <!-- Pantalla 2: capítulos de un mundo -->
+  <main class="screen" id="screen-world">
+    <div class="wrap narrow">
+      <header class="topbar">
+        <button class="back" id="back-home" aria-label="Volver a los mundos">←</button>
+        <div>
+          <h2 id="world-title"></h2>
+          <small id="world-subtitle"></small>
+        </div>
+      </header>
+      <div class="chapter-list" id="chapter-list"></div>
+    </div>
+  </main>
+
+  <!-- Pantalla 3: camino de niveles de un capítulo -->
+  <main class="screen" id="screen-chapter">
+    <div class="wrap narrow">
+      <header class="topbar">
+        <button class="back" id="back-world" aria-label="Volver a los capítulos">←</button>
+        <div>
+          <h2 id="chapter-title"></h2>
+          <small id="chapter-subtitle"></small>
+        </div>
+      </header>
+      <div class="level-path" id="level-path"></div>
+    </div>
+  </main>
+
+  <!-- Pantalla 4: el nivel -->
+  <main class="screen" id="screen-game">
+    <div class="wrap">
+      <header class="topbar">
+        <button class="back" id="back-chapter" aria-label="Volver al capítulo">←</button>
+        <div>
+          <small class="chapter" id="level-chapter"></small>
+          <h2 id="level-title"></h2>
+        </div>
+      </header>
+
+      <section class="brief">
+        <p id="level-brief"></p>
+        <div class="chips" id="level-chips"></div>
+      </section>
+
+      <section class="board">
+        <canvas id="board"></canvas>
+        <div class="legend" id="legend"></div>
+      </section>
+
+      <section class="inspector" id="inspector" hidden></section>
+
+      <section class="palette" id="palette"></section>
+
+      <div class="actions">
+        <button class="btn ghost" id="reset" title="Reiniciar nivel">↺</button>
+        <button class="btn primary" id="run">▶ Simular tráfico</button>
+      </div>
+    </div>
+  </main>
 
   <div class="toast" id="toast"></div>
   <div class="modal" id="modal"><div class="card" id="modal-card"></div></div>

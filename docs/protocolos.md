@@ -1,6 +1,8 @@
 # Más allá de HTTP: dominios y protocolos industriales
 
-Propuesta de diseño para que el juego no se limite a arquitecturas web. Todavía no está implementado.
+Propuesta de diseño para que el juego no se limite a arquitecturas web.
+
+> **Estado:** implementados la separación en mundos (`src/worlds/types.ts`) y el capítulo **CANopen** (`src/worlds/canopen/`, ver README). Pendientes: PROFINET, PROFIBUS y el mundo Web3. A diferencia del plan de abajo, el motor web no se movió: `src/engine/` sigue siendo el mundo web y `src/worlds/web.ts` lo adapta al contrato común.
 
 ## 1. La idea: "dominios" intercambiables
 

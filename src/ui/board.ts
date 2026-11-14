@@ -1,11 +1,10 @@
-import { BLOCKS } from '../engine/catalog';
-import { displayName, edgeRoles } from '../engine/graph';
-import type { SimulationResult } from '../engine/simulate';
-import type { Graph, GraphEdge, PortRole } from '../engine/types';
+import type { NodeStatus, Scene, SceneEdge, SceneNode } from '../worlds/types';
 import type { BoardPoint, Positions } from './layout';
 
 const NODE_W = 112;
 const NODE_H = 62;
+const COMPACT_W = 64;
+const COMPACT_H = 40;
 const MARGIN = 6;
 const DELETE_RADIUS = 11;
 const TAP_SLOP_PX = 7;
@@ -18,36 +17,20 @@ const COLOR = {
   selected: '#6c8cff',
   text: '#ffffff',
   muted: '#8a90b0',
-  primary: '#7d93ff',
-  primaryIdle: '#56608f',
-  fallback: '#f59e42',
-  write: '#34d399',
-  async: '#c084fc',
-  inactive: '#3a4060',
   ok: '#3ecf8e',
   warn: '#f5b942',
   bad: '#ff5d6c',
-  request: '#9fe8c3',
   background: '#0f1220',
 };
 
-/** Lo que el tablero necesita para dibujarse. Lo calcula el controlador (main.ts). */
+const STATUS_COLOR: Record<NodeStatus, string> = { idle: COLOR.nodeBorder, ok: COLOR.ok, warn: COLOR.warn, bad: COLOR.bad };
+
+/** Lo que el tablero necesita para dibujarse. Lo calcula el controlador (main.ts) con el mundo del nivel. */
 export interface BoardView {
-  graph: Graph;
+  scene: Scene;
   positions: Positions;
   selectedId: string | null;
-  result: SimulationResult | null;
-  trafficRps: number;
-  /** Si el nivel tiene escrituras, las conexiones a la base de datos las llevan. */
-  hasWrites: boolean;
 }
-
-const ROLE_STYLE: Record<PortRole, { color: string; dash: number[]; label: string | null; text: string }> = {
-  primary: { color: COLOR.primary, dash: [], label: null, text: '#c7d0ff' },
-  fallback: { color: COLOR.fallback, dash: [7, 5], label: 'si falla', text: '#ffd2a6' },
-  write: { color: COLOR.write, dash: [], label: 'escrituras', text: '#bdf5dd' },
-  async: { color: COLOR.async, dash: [2, 5], label: 'a la cola', text: '#ead5ff' },
-};
 
 export interface BoardHandlers {
   onNodeTap(id: string): void;
@@ -63,7 +46,7 @@ interface Pixel {
 }
 
 type Particle =
-  | { kind: 'request'; edgeId: string; t: number; color: string }
+  | { kind: 'flow'; edgeId: string; t: number; color: string; reverse: boolean }
   | { kind: 'lost'; x: number; y: number; vx: number; vy: number; life: number };
 
 export class Board {
@@ -109,11 +92,10 @@ export class Board {
     this.draw();
   }
 
-  /** Anima el tráfico del resultado durante `durationMs` y luego llama a `onDone`. */
+  /** Anima el resultado durante `durationMs` y luego llama a `onDone`. */
   playSimulation(durationMs: number, onDone: () => void): void {
     this.stopAnimation();
-    const result = this.view?.result;
-    if (!result) return;
+    if (!this.view) return;
 
     const spawnDebt = new Map<string, number>();
     const start = performance.now();
@@ -122,7 +104,7 @@ export class Board {
     const step = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      this.spawnParticles(result, spawnDebt, dt);
+      this.spawnParticles(spawnDebt, dt);
       this.moveParticles(dt);
       this.draw();
       if (now - start < durationMs) {
@@ -144,29 +126,28 @@ export class Board {
 
   // ---------- partículas ----------
 
-  private spawnParticles(result: SimulationResult, debt: Map<string, number>, dt: number): void {
+  private spawnParticles(debt: Map<string, number>, dt: number): void {
     const view = this.view!;
-    const roles = edgeRoles(view.graph);
     const emit = (key: string, rate: number, create: () => Particle) => {
       let pending = (debt.get(key) ?? 0) + rate * dt;
       for (; pending >= 1; pending--) this.particles.push(create());
       debt.set(key, pending);
     };
 
-    for (const edge of view.graph.edges) {
-      const flow = result.edgeFlow[edge.id] ?? 0;
-      const role = roles.get(edge.id) ?? 'primary';
-      const color = role === 'primary' ? COLOR.request : ROLE_STYLE[role].color;
-      emit(edge.id, flow * 0.045, () => ({ kind: 'request', edgeId: edge.id, t: 0, color }));
+    for (const edge of view.scene.edges) {
+      const p = edge.particles;
+      if (!p || p.rate <= 0) continue;
+      // Sin flecha, el tráfico va en los dos sentidos (un bus).
+      emit(edge.id, p.rate, () => ({ kind: 'flow', edgeId: edge.id, t: 0, color: p.color, reverse: !edge.arrow && Math.random() < 0.5 }));
     }
-    for (const node of view.graph.nodes) {
-      const lost = result.nodes[node.id]?.lostRps ?? 0;
-      if (lost <= 0) continue;
-      const center = this.toPixel(view.positions.get(node.id)!);
-      emit(`lost:${node.id}`, 3 + lost * 0.12, () => ({
+    for (const node of view.scene.nodes) {
+      if (node.lossRate <= 0) continue;
+      const center = this.nodeCenter(node.id);
+      const size = nodeSize(node);
+      emit(`lost:${node.id}`, node.lossRate, () => ({
         kind: 'lost',
-        x: center.x + (Math.random() - 0.5) * NODE_W * 0.6,
-        y: center.y + NODE_H / 2,
+        x: center.x + (Math.random() - 0.5) * size.w * 0.6,
+        y: center.y + size.h / 2,
         vx: (Math.random() - 0.5) * 30,
         vy: 30 + Math.random() * 30,
         life: 1,
@@ -176,7 +157,7 @@ export class Board {
 
   private moveParticles(dt: number): void {
     for (const p of this.particles) {
-      if (p.kind === 'request') {
+      if (p.kind === 'flow') {
         p.t += dt * 0.85;
       } else {
         p.x += p.vx * dt;
@@ -184,7 +165,7 @@ export class Board {
         p.life -= dt * 1.2;
       }
     }
-    this.particles = this.particles.filter((p) => (p.kind === 'request' ? p.t < 1 : p.life > 0));
+    this.particles = this.particles.filter((p) => (p.kind === 'flow' ? p.t < 1 : p.life > 0));
   }
 
   // ---------- geometría ----------
@@ -205,40 +186,55 @@ export class Board {
     return this.portrait ? { along: y, across: x } : { along: x, across: y };
   }
 
-  private nodeCenter(id: string): Pixel {
-    return this.toPixel(this.view!.positions.get(id)!);
+  private sceneNode(id: string): SceneNode | undefined {
+    return this.view?.scene.nodes.find((n) => n.id === id);
   }
 
-  /** Extremos de una flecha, recortados al borde de cada bloque. */
-  private edgeEnds(edge: GraphEdge): { from: Pixel; to: Pixel } {
+  private nodeCenter(id: string): Pixel {
+    return this.toPixel(this.view!.positions.get(id) ?? { along: 0.5, across: 0.5 });
+  }
+
+  /** Extremos de una línea, recortados al borde de cada bloque. */
+  private edgeEnds(edge: SceneEdge): { from: Pixel; to: Pixel } {
     const a = this.nodeCenter(edge.from);
     const b = this.nodeCenter(edge.to);
+    const sa = nodeSize(this.sceneNode(edge.from));
+    const sb = nodeSize(this.sceneNode(edge.to));
     const dx = b.x - a.x;
     const dy = b.y - a.y;
-    const scale = (pad: number) => Math.min((NODE_W / 2 + pad) / Math.abs(dx || 1e-6), (NODE_H / 2 + pad) / Math.abs(dy || 1e-6));
-    const s1 = scale(2);
-    const s2 = scale(6);
+    const scale = (size: { w: number; h: number }, pad: number) =>
+      Math.min((size.w / 2 + pad) / Math.abs(dx || 1e-6), (size.h / 2 + pad) / Math.abs(dy || 1e-6));
+    const s1 = scale(sa, 2);
+    const s2 = scale(sb, edge.arrow ? 6 : 2);
     return { from: { x: a.x + dx * s1, y: a.y + dy * s1 }, to: { x: b.x - dx * s2, y: b.y - dy * s2 } };
   }
 
   private deleteButton(id: string): Pixel {
     const c = this.nodeCenter(id);
-    return { x: c.x + NODE_W / 2 - 4, y: c.y - NODE_H / 2 + 4 };
+    const size = nodeSize(this.sceneNode(id));
+    return { x: c.x + size.w / 2 - 4, y: c.y - size.h / 2 + 4 };
   }
 
   private nodeAt(p: Pixel): string | null {
-    const nodes = this.view?.graph.nodes ?? [];
+    const nodes = this.view?.scene.nodes ?? [];
     for (let i = nodes.length - 1; i >= 0; i--) {
       const c = this.nodeCenter(nodes[i].id);
-      if (Math.abs(p.x - c.x) < NODE_W / 2 && Math.abs(p.y - c.y) < NODE_H / 2) return nodes[i].id;
+      const size = nodeSize(nodes[i]);
+      if (Math.abs(p.x - c.x) < size.w / 2 && Math.abs(p.y - c.y) < size.h / 2) return nodes[i].id;
     }
     return null;
   }
 
+  /** Punto que se toca para borrar una conexión: el centro, o más allá si ahí va la etiqueta. */
+  private handlePoint(edge: SceneEdge): Pixel {
+    const { from, to } = this.edgeEnds(edge);
+    return lerp(from, to, edge.label?.at === 0.5 ? 0.75 : 0.5);
+  }
+
   private edgeAt(p: Pixel): string | null {
-    for (const edge of this.view?.graph.edges ?? []) {
-      const { from, to } = this.edgeEnds(edge);
-      if (Math.hypot(p.x - (from.x + to.x) / 2, p.y - (from.y + to.y) / 2) < 16) return edge.id;
+    for (const edge of this.view?.scene.edges ?? []) {
+      const h = this.handlePoint(edge);
+      if (Math.hypot(p.x - h.x, p.y - h.y) < 16) return edge.id;
     }
     return null;
   }
@@ -255,7 +251,7 @@ export class Board {
       if (!this.view || this.isAnimating) return;
       const p = position(ev);
       const selected = this.view.selectedId;
-      if (selected && !this.isFixed(selected)) {
+      if (selected && this.sceneNode(selected)?.deletable) {
         const del = this.deleteButton(selected);
         if (Math.hypot(p.x - del.x, p.y - del.y) < DELETE_RADIUS + 4) {
           this.handlers.onDeleteTap(selected);
@@ -270,7 +266,7 @@ export class Board {
 
     this.canvas.addEventListener('pointermove', (ev) => {
       const drag = this.drag;
-      if (!drag?.nodeId) return;
+      if (!drag?.nodeId || !this.sceneNode(drag.nodeId)?.draggable) return;
       const p = position(ev);
       if (!drag.moved && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) < TAP_SLOP_PX) return;
       drag.moved = true;
@@ -288,10 +284,6 @@ export class Board {
     });
   }
 
-  private isFixed(id: string): boolean {
-    return this.view?.graph.nodes.find((n) => n.id === id)?.fixed ?? false;
-  }
-
   // ---------- dibujo ----------
 
   private draw(): void {
@@ -300,17 +292,18 @@ export class Board {
     this.drawGrid();
     if (!this.view) return;
 
-    const roles = edgeRoles(this.view.graph);
-    for (const edge of this.view.graph.edges) this.drawEdge(edge, roles.get(edge.id) ?? 'primary');
+    const { scene } = this.view;
+    for (const edge of scene.edges) this.drawEdge(edge);
     this.drawParticles();
-    for (const node of this.view.graph.nodes) this.drawNode(node.id);
+    for (const node of scene.nodes) this.drawNode(node);
 
-    const placed = this.view.graph.nodes.some((n) => !n.fixed);
-    if (!placed) {
+    if (scene.emptyHint) {
       ctx.fillStyle = '#5d6590';
       ctx.font = '13px system-ui';
       ctx.textAlign = 'center';
-      ctx.fillText('Añade bloques desde abajo ↓', this.width / 2, this.portrait ? this.height * 0.3 : this.height * 0.15);
+      ctx.textBaseline = 'middle';
+      // Pegado al borde superior: los bloques nunca llegan ahí (se recortan al margen).
+      ctx.fillText(scene.emptyHint, this.width / 2, 14);
     }
   }
 
@@ -323,32 +316,21 @@ export class Board {
     for (let y = 0; y < this.height; y += 24) line(ctx, { x: 0, y }, { x: this.width, y });
   }
 
-  private drawEdge(edge: GraphEdge, role: PortRole): void {
+  private drawEdge(edge: SceneEdge): void {
     const { ctx } = this;
-    const view = this.view!;
-    const flow = view.result ? (view.result.edgeFlow[edge.id] ?? 0) : null;
     const { from, to } = this.edgeEnds(edge);
-    const style = ROLE_STYLE[role];
 
-    let color = style.color;
-    if (role === 'primary' && flow === null) color = COLOR.primaryIdle;
-    if (flow === 0) color = COLOR.inactive;
-
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash(style.dash);
+    ctx.strokeStyle = edge.color;
+    ctx.fillStyle = edge.color;
+    ctx.lineWidth = edge.arrow ? 2.5 : 4;
+    ctx.setLineDash(edge.dash);
     line(ctx, from, to);
     ctx.setLineDash([]);
-    arrowHead(ctx, from, to);
+    if (edge.arrow) arrowHead(ctx, from, to);
 
-    const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-    if (flow !== null && flow > 0) {
-      pill(ctx, mid, `${Math.round(flow)}/s`, style.text);
-    } else if (flow === null) {
-      const writesHere = view.hasWrites && role === 'fallback' && this.isDatabase(edge.to);
-      const label = writesHere ? 'si falla + escrituras' : style.label;
-      if (label) pill(ctx, lerp(from, to, 0.3), label, style.text);
+    if (edge.label) pill(ctx, lerp(from, to, edge.label.at), edge.label.text, edge.label.color);
+    if (edge.handle) {
+      const mid = this.handlePoint(edge);
       ctx.fillStyle = '#2c3354';
       circle(ctx, mid, 6);
       ctx.fillStyle = COLOR.muted;
@@ -356,20 +338,16 @@ export class Board {
     }
   }
 
-  private isDatabase(id: string): boolean {
-    return this.view?.graph.nodes.find((n) => n.id === id)?.type === 'db';
-  }
-
   private drawParticles(): void {
     const { ctx } = this;
-    const edges = new Map(this.view!.graph.edges.map((e) => [e.id, e]));
+    const edges = new Map(this.view!.scene.edges.map((e) => [e.id, e]));
     for (const p of this.particles) {
-      if (p.kind === 'request') {
+      if (p.kind === 'flow') {
         const edge = edges.get(p.edgeId);
         if (!edge) continue;
         const { from, to } = this.edgeEnds(edge);
         ctx.fillStyle = p.color;
-        circle(ctx, lerp(from, to, p.t), 3.2);
+        circle(ctx, lerp(from, to, p.reverse ? 1 - p.t : p.t), 3.2);
       } else {
         ctx.globalAlpha = Math.max(0, p.life);
         ctx.fillStyle = COLOR.bad;
@@ -379,53 +357,52 @@ export class Board {
     }
   }
 
-  private drawNode(id: string): void {
+  private drawNode(node: SceneNode): void {
     const { ctx } = this;
     const view = this.view!;
-    const node = view.graph.nodes.find((n) => n.id === id)!;
-    const spec = BLOCKS[node.type];
-    const stats = view.result?.nodes[id];
-    const c = this.nodeCenter(id);
-    const x = c.x - NODE_W / 2;
-    const y = c.y - NODE_H / 2;
-    const selected = view.selectedId === id;
+    const size = nodeSize(node);
+    const c = this.nodeCenter(node.id);
+    const x = c.x - size.w / 2;
+    const y = c.y - size.h / 2;
+    const selected = view.selectedId === node.id;
 
-    ctx.fillStyle = node.fixed ? COLOR.fixedFill : COLOR.nodeFill;
-    roundRect(ctx, x, y, NODE_W, NODE_H, 12);
+    ctx.fillStyle = node.deletable ? COLOR.nodeFill : COLOR.fixedFill;
+    roundRect(ctx, x, y, size.w, size.h, node.compact ? 10 : 12);
     ctx.fill();
 
-    let border = COLOR.nodeBorder;
-    if (stats && (stats.load > 0 || stats.lostRps > 0)) border = stats.lostRps > 0 ? COLOR.bad : utilizationColor(stats.utilization);
-    if (selected) border = COLOR.selected;
-    ctx.strokeStyle = border;
+    ctx.strokeStyle = selected ? COLOR.selected : STATUS_COLOR[node.status];
     ctx.lineWidth = selected ? 3 : 2;
     ctx.stroke();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = COLOR.text;
-    ctx.font = '18px system-ui';
-    ctx.fillText(spec.icon, c.x, c.y - 13);
-    ctx.font = '600 12px system-ui';
-    ctx.fillText(displayName(view.graph, node), c.x, c.y + 5);
-
-    ctx.font = '11px system-ui';
-    ctx.fillStyle = COLOR.muted;
-    const capacityText = Number.isFinite(spec.capacity) ? `${spec.capacity}${spec.unit ? ' tr' : ''}/s` : '';
-    let subtitle = node.type === 'users' ? `${view.trafficRps}/s` : `máx ${capacityText}`;
-    if (stats && node.type !== 'users') subtitle = `${Math.round(stats.load)} / ${capacityText}`;
-    ctx.fillText(subtitle, c.x, c.y + 20);
-
-    if (stats && stats.load > 0 && Number.isFinite(spec.capacity)) {
-      const barWidth = NODE_W - 20;
-      ctx.fillStyle = '#2c3354';
-      ctx.fillRect(x + 10, y + NODE_H - 5, barWidth, 3);
-      ctx.fillStyle = utilizationColor(stats.utilization);
-      ctx.fillRect(x + 10, y + NODE_H - 5, barWidth * Math.min(stats.utilization, 1), 3);
+    if (node.compact) {
+      ctx.font = '14px system-ui';
+      ctx.fillText(node.icon, c.x, c.y - 7);
+      ctx.font = '10px system-ui';
+      ctx.fillStyle = COLOR.muted;
+      ctx.fillText(node.subtitle, c.x, c.y + 10);
+    } else {
+      ctx.font = '18px system-ui';
+      ctx.fillText(node.icon, c.x, c.y - 13);
+      ctx.font = '600 12px system-ui';
+      ctx.fillText(node.title, c.x, c.y + 5);
+      ctx.font = '11px system-ui';
+      ctx.fillStyle = COLOR.muted;
+      ctx.fillText(node.subtitle, c.x, c.y + 20);
     }
 
-    if (selected && !node.fixed) {
-      const d = this.deleteButton(id);
+    if (node.bar !== null) {
+      const barWidth = size.w - 20;
+      ctx.fillStyle = '#2c3354';
+      ctx.fillRect(x + 10, y + size.h - 5, barWidth, 3);
+      ctx.fillStyle = STATUS_COLOR[node.status === 'idle' ? 'ok' : node.status];
+      ctx.fillRect(x + 10, y + size.h - 5, barWidth * Math.min(node.bar, 1), 3);
+    }
+
+    if (selected && node.deletable) {
+      const d = this.deleteButton(node.id);
       ctx.fillStyle = COLOR.bad;
       circle(ctx, d, DELETE_RADIUS);
       ctx.fillStyle = COLOR.text;
@@ -437,16 +414,16 @@ export class Board {
 
 // ---------- utilidades de dibujo ----------
 
+function nodeSize(node: SceneNode | undefined): { w: number; h: number } {
+  return node?.compact ? { w: COMPACT_W, h: COMPACT_H } : { w: NODE_W, h: NODE_H };
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
 function lerp(a: Pixel, b: Pixel, t: number): Pixel {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
-function utilizationColor(u: number): string {
-  return u > 1 ? COLOR.bad : u > 0.8 ? COLOR.warn : COLOR.ok;
 }
 
 function line(ctx: CanvasRenderingContext2D, a: Pixel, b: Pixel): void {
